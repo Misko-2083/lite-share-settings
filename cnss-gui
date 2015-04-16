@@ -1,0 +1,218 @@
+#!/bin/bash
+#Samba share settings GUI for Linux Lite
+#Licence GPLv2
+#Run with: /usr/bin/su-to-root -X -c /path/to/cnss-gui
+
+TITLE="Network Share Settings"
+
+function add_first_user() {
+LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
+user=$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba. \nAfter this a terminal window will open and \nyou will be asked to enter your Linux Lite password twice." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")
+x-terminal-emulator -t "smbpasswd" --geometry=60x30 -e smbpasswd -a "$user"
+sed -i 's/<[^>]*>/<'$user'>/g' /etc/samba/smbusers
+}
+
+function add_user() {
+LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
+user=$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba. \nAfter this a terminal window will open and \nyou will be asked to enter your Linux Lite password twice." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")
+x-terminal-emulator -t "smbpasswd" --geometry=60x30 -e smbpasswd -a "$user"
+echo '<$user> = "<$user>"' >> /etc/samba/smbusers
+}
+
+function global_settings() {
+zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will be backed up,
+\n \nDo you want to continue?"
+  if [ $? = 1 ];
+	then zenity --info --title="$TITLE" --text "Configuration canceled"
+	main
+  fi
+cp -f /etc/samba/smb.conf /etc/samba/smb.conf.backup
+rm -f /etc/samba/smb.conf
+touch /etc/samba/smb.conf
+echo "#======================= Global Settings ====================================" >> /etc/samba/smb.conf
+echo [global] >> /etc/samba/smb.conf
+group=$(zenity --title="$TITLE" --entry --entry-text=WORKGROUP --text="Enter the name of the workgroup:" --cancel-label="Use Default")
+  if [ $? = 1 ]; then
+	group="WORKGROUP"
+  fi
+echo workgroup = "$group" >> /etc/samba/smb.conf
+echo server string =  Linux Lite Shares >> /etc/samba/smb.conf
+hostname=$(zenity --title="$TITLE" --entry --text="Enter the name of your computer (hostname):" --cancel-label="Use Default")
+  if [ $? = 1 ]; then
+	hostname="lite"
+  fi
+echo netbios name = "$hostname" >> /etc/samba/smb.conf
+echo "security = user" >> /etc/samba/smb.conf
+echo "encrypt passwords = true" >> /etc/samba/smb.conf
+echo "username map = /etc/samba/smbusers" >> /etc/samba/smb.conf
+echo "map to guest = bad user" >> /etc/samba/smb.conf
+echo "guest account = nobody" >> /etc/samba/smb.conf
+echo "dns proxy = no" >> /etc/samba/smb.conf
+echo "#======================= Share Definitions ===================================" >> /etc/samba/smb.conf
+}
+
+function add_share() {
+zenity --width=600 --height=220 --info --title="$TITLE" --text "Never share system folders such as /, /usr, /etc , /var ... "
+
+share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
+#Mark the begining and the end of share for handling
+echo "#share_start $share" >> /etc/samba/smb.conf
+echo ["$share"] >> /etc/samba/smb.conf
+path=$(zenity --title="$TITLE" --entry --text="Type the full path of the folder or paste it, eg /home/linuxlite/Music ")
+echo path = "$path" >> /etc/samba/smb.conf
+echo "available = yes" >> /etc/samba/smb.conf
+echo "valid users = %U %G" >> /etc/samba/smb.conf
+echo "write list = %U" >> /etc/samba/smb.conf
+echo browsable = yes >> /etc/samba/smb.conf
+echo public = no >> /etc/samba/smb.conf
+if zenity --question --title="$TITLE" --text="Do you want to allow recording and change on the files?"; then
+	echo writable = yes >> /etc/samba/smb.conf
+else
+	echo writable = no >> /etc/samba/smb.conf
+fi
+echo "guest ok = no" >> /etc/samba/smb.conf
+echo "read only = no" >> /etc/samba/smb.conf
+echo "printable = no" >> /etc/samba/smb.conf
+echo "locking = no" >> /etc/samba/smb.conf
+echo "strict locking = no" >> /etc/samba/smb.conf
+echo "#share_end $share" >> /etc/samba/smb.conf
+main
+}
+
+function restore_prev() {
+if [ -f /etc/samba/smb.conf.backup ]; then
+	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be removed.\n\nDo you want to continue?"; then
+		rm -f /etc/samba/smb.conf
+		mv -f /etc/samba/smb.conf.backup /etc/samba/smb.conf
+	else
+		main
+	fi
+else
+	zenity --info --title="$TITLE" --text="No previous setting found."
+	main
+fi
+}
+
+function restart_network() {
+stdbuf -oL /bin/bash \-c '(sudo service smbd restart && sudo service nmbd restart && sleep 3 )' 2>&1 |
+stdbuf -oL sed -n -e 's/^\(.\{128\}\).*/\1/' -e '/\[*$/ s/^/# /p' -e '/\*$/ s/^/# /p' |     #sed 's/^\(.\{128\}\).*/\1/'  Display only the first 128 characters
+zenity --progress --title="Restarting Network Share Services..." --pulsate \
+--width=600 --auto-close 
+
+                                if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                        
+                                        zenity --error \
+                                        --title="Error" --text="$CONFIGURE has failed."
+                                        exit 0
+                                fi
+
+PROCEED=$(zenity --info --title="$CONFIGURE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Your settings have been applied."; echo $?)
+if [ ${PROCEED} -eq 1 ]; then
+	zenity --info --title="Finished" --window-icon="${INSTALL_ICON}" --text="Your settings have been applied."
+	exit;
+else
+	exit
+fi
+}
+
+function rem_share() {
+#Share names selection
+sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --checklist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
+if [ $? = 1 ]; then
+	main
+fi
+if [ -z $sharename ]; then
+	zenity --warning --title="$TITLE" --text="Nothing was selected for removal!"
+	main
+fi
+#remove shares
+for k in $sharename; do sudo sed -i '/^\#share_start '$k'/,/^\#share_end '$k'/d' /etc/samba/smb.conf; done
+main
+}
+
+function help() {
+HELP=$(zenity --list --radiolist --width=350 --height=500 --title="$TITLE" --column=Select --column=Task \
+TRUE "Help: Run first time setup" \
+FALSE "Help: Show Shares" \
+FALSE "Help: Add a User" \
+FALSE "Help: Add Share" \
+FALSE "Help: Remove Share" \
+FALSE "Help: Edit the smb.conf" \
+FALSE "Help: Restart Network Services" \
+FALSE "Help: Restore Previous Settings" \
+FALSE "Help: How to accses shares" \
+FALSE "Return to main" )
+
+case $HELP in
+"Help: Run first time setup") zenity --info --title="Help: $TITLE"  --text="Help."
+;;
+"Help: Show Shares") zenity --info --title="Help: $TITLE"  --text="Help."
+;;
+"Help: Add a User" ) zenity --info --title="Help: $TITLE"  --text="Help."
+;;
+"Help: Add Share") zenity --info --title="Help: $TITLE"  --text="Help."
+;;
+"Help: Remove Share") zenity --info --title="Help: $TITLE"  --text="Help."
+;;
+"Help: Edit the smb.conf" ) zenity --info --title="Help: $TITLE" --text="Help."
+;;
+"Help: Restart Network Services") zenity --info --title="Help: $TITLE" --text="Help."
+;;
+"Help: Restore Previous Settings") zenity --info --title="Help: $TITLE" --text="Help."
+;;
+"Help: How to accses shares") zenity --info --title="Help: $TITLE" --text="Help."
+;;
+"Return to main") main
+;;
+esac
+}
+
+function main() {
+CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --column=Select --column=Task \
+FALSE "Run first time setup" \
+TRUE "Show Shares" \
+FALSE "Add a User" \
+FALSE "Add Share" \
+FALSE "Remove Share" \
+FALSE "Edit the smb.conf" \
+FALSE "Restart Network Services" \
+FALSE "Restore Previous Settings" \
+FALSE "Help" \
+FALSE "Exit" )
+
+case $CHOICE in
+"Run first time setup")
+		add_first_user
+		global_settings
+		if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
+			add_share
+		else
+			restart_network
+			main
+		fi
+		restart_network
+;;
+"Show Shares") sed -n '/^\#share_start/,/^\#share_end/p' /etc/samba/smb.conf | sed 's/^\#share_start.*$//g;s/^\#share_end.*$//g' | zenity --text-info --title="Show Samba Shares"
+				main
+;;
+"Add a User" )add_user
+;;
+"Add Share") add_share
+;;
+"Remove Share") rem_share
+;;
+"Edit the smb.conf" ) leafpad /etc/samba/smb.conf
+;;
+"Restart Network Services") restart_network
+;;
+"Restore Previous Settings") restore_prev
+
+;;
+"Help") help
+;;
+"Exit") exit 0
+;;
+esac
+}
+
+main
