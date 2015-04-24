@@ -7,23 +7,47 @@ TITLE="Network Share Settings"
 
 function add_first_user() {
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
-user=$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba. \nAfter this a terminal window will open and \nyou will be asked to enter your Linux Lite password twice." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")
-x-terminal-emulator -t "smbpasswd" --geometry=60x30 -e smbpasswd -a "$user"
+user="$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba." --print-column=2  --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")"
+exit_status=$(mktemp /tmp/XXXXXX)
+
+ echo -e "$(zenity --forms --title="$TITLE" --text="Enter the password twice" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $USER  ||   echo 1 >> $exit_status) 
+
+if [ "$(cat $exit_status )"  == "1" ]; then
+	zenity --error --title="$TITLE" --text="error: Password mismatch or\n             No Password entered"
+	rm -f $exit_status
+	unset LL_LIST_H
+	main
+fi
 sed -i 's/<[^>]*>/<'$user'>/g' /etc/samba/smbusers
+unset LL_LIST_H
+rm -f $exit_status
 }
 
 function add_user() {
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
-user=$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba. \nAfter this a terminal window will open and \nyou will be asked to enter your Linux Lite password twice." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")
-x-terminal-emulator -t "smbpasswd" --geometry=60x30 -e smbpasswd -a "$user"
-echo '<$user> = "<$user>"' >> /etc/samba/smbusers
+user="$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")"
+exit_status=$(mktemp /tmp/XXXXXX)
+
+ echo -e "$(zenity --forms --title="Add Friend" --text="Enter the password twice" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
+
+if [ "$(cat $exit_status )"  == "1" ]; then
+	zenity --error --title="$TITLE" --text="error: Password mismatch or\n             No Password entered"
+	rm -f $exit_status
+	unset LL_LIST_H
+	main
+fi
+rm -f $exit_status
+
+echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
+unset LL_LIST_H
+main
 }
 
 function global_settings() {
 zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will be backed up,
 \n \nDo you want to continue?"
   if [ $? = 1 ];
-	then zenity --info --title="$TITLE" --text "Configuration canceled"
+	then
 	main
   fi
 cp -f /etc/samba/smb.conf /etc/samba/smb.conf.backup
@@ -37,7 +61,7 @@ group=$(zenity --title="$TITLE" --entry --entry-text=WORKGROUP --text="Enter the
   fi
 echo workgroup = "$group" >> /etc/samba/smb.conf
 echo server string =  Linux Lite Shares >> /etc/samba/smb.conf
-hostname=$(zenity --title="$TITLE" --entry --text="Enter the name of your computer (hostname):" --cancel-label="Use Default")
+hostname=$(zenity --title="$TITLE" --entry-text=lite --entry --text="Enter the name of your computer (hostname):" --cancel-label="Use Default")
   if [ $? = 1 ]; then
 	hostname="lite"
   fi
@@ -109,9 +133,9 @@ zenity --progress --title="Restarting Network Share Services..." --pulsate \
 PROCEED=$(zenity --info --title="$CONFIGURE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Your settings have been applied."; echo $?)
 if [ ${PROCEED} -eq 1 ]; then
 	zenity --info --title="Finished" --window-icon="${INSTALL_ICON}" --text="Your settings have been applied."
-	exit;
+	main;
 else
-	exit
+	main
 fi
 }
 
@@ -179,7 +203,9 @@ FALSE "Restart Network Services" \
 FALSE "Restore Previous Settings" \
 FALSE "Help" \
 FALSE "Exit" )
-
+if [ $? = 1 ]; then
+exit 0
+fi
 case $CHOICE in
 "Run first time setup")
 		add_first_user
@@ -188,7 +214,6 @@ case $CHOICE in
 			add_share
 		else
 			restart_network
-			main
 		fi
 		restart_network
 ;;
