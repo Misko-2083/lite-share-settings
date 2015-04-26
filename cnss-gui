@@ -3,17 +3,17 @@
 #Licence GPLv2
 #Run with: /usr/bin/su-to-root -X -c /path/to/cnss-gui
 
-TITLE="Network Share Settings"
+TITLE="Lite Shares"
 
 function add_first_user() {
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
-user="$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba." --print-column=2  --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")"
+user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --print-column=2  --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
 exit_status=$(mktemp /tmp/XXXXXX)
 
- echo -e "$(zenity --forms --title="$TITLE" --text="Enter the password twice" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $USER  ||   echo 1 >> $exit_status) 
+ echo -e "$(zenity --forms --title="$TITLE" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $USER  ||   echo 1 >> $exit_status) 
 
 if [ "$(cat $exit_status )"  == "1" ]; then
-	zenity --error --title="$TITLE" --text="error: Password mismatch or\n             No Password entered"
+	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
 	rm -f $exit_status
 	unset LL_LIST_H
 	main
@@ -25,13 +25,13 @@ rm -f $exit_status
 
 function add_user() {
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
-user="$(zenity --title="Add User to Samba" --list --radiolist --text="Select a user name you whish to add to Samba." --column="Select" --column="Username:" --width=325  --height=300  "${LL_LIST_H[@]}")"
+user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
 exit_status=$(mktemp /tmp/XXXXXX)
 
- echo -e "$(zenity --forms --title="Add Friend" --text="Enter the password twice" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
+ echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
 
 if [ "$(cat $exit_status )"  == "1" ]; then
-	zenity --error --title="$TITLE" --text="error: Password mismatch or\n             No Password entered"
+	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
 	rm -f $exit_status
 	unset LL_LIST_H
 	main
@@ -76,7 +76,7 @@ echo "#======================= Share Definitions ===============================
 }
 
 function add_share() {
-zenity --width=600 --height=220 --info --title="$TITLE" --text "Never share system folders such as /, /usr, /etc , /var ... "
+zenity --width=600 --height=220 --info --title="$TITLE" --text "Never share system folders such as:\n /, /usr, /etc , /var ... "
 
 share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
 #Mark the begining and the end of share for handling
@@ -159,9 +159,9 @@ HELP=$(zenity --list --radiolist --width=350 --height=500 --title="$TITLE" --col
 TRUE "Help: Run first time setup" \
 FALSE "Help: Show Shares" \
 FALSE "Help: Add a User" \
-FALSE "Help: Add Share" \
-FALSE "Help: Remove Share" \
-FALSE "Help: Edit the smb.conf" \
+FALSE "Help: Add a Share" \
+FALSE "Help: Remove a Share" \
+FALSE "Help: Edit the config file" \
 FALSE "Help: Restart Network Services" \
 FALSE "Help: Restore Previous Settings" \
 FALSE "Help: How to accses shares" \
@@ -174,11 +174,11 @@ case $HELP in
 ;;
 "Help: Add a User" ) zenity --info --title="Help: $TITLE"  --text="Help."
 ;;
-"Help: Add Share") zenity --info --title="Help: $TITLE"  --text="Help."
+"Help: Add a Share") zenity --info --title="Help: $TITLE"  --text="Help."
 ;;
-"Help: Remove Share") zenity --info --title="Help: $TITLE"  --text="Help."
+"Help: Remove a Share") zenity --info --title="Help: $TITLE"  --text="Help."
 ;;
-"Help: Edit the smb.conf" ) zenity --info --title="Help: $TITLE" --text="Help."
+"Help: Edit the config file" ) zenity --info --title="Help: $TITLE" --text="Help."
 ;;
 "Help: Restart Network Services") zenity --info --title="Help: $TITLE" --text="Help."
 ;;
@@ -196,9 +196,9 @@ CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --c
 FALSE "Run first time setup" \
 TRUE "Show Shares" \
 FALSE "Add a User" \
-FALSE "Add Share" \
-FALSE "Remove Share" \
-FALSE "Edit the smb.conf" \
+FALSE "Add a Share" \
+FALSE "Remove a Share" \
+FALSE "Edit the config file" \
 FALSE "Restart Network Services" \
 FALSE "Restore Previous Settings" \
 FALSE "Help" \
@@ -217,16 +217,16 @@ case $CHOICE in
 		fi
 		restart_network
 ;;
-"Show Shares") sed -n '/^\#share_start/,/^\#share_end/p' /etc/samba/smb.conf | sed 's/^\#share_start.*$//g;s/^\#share_end.*$//g' | zenity --text-info --title="Show Samba Shares"
+"Show Shares") sed -n '/^\#share_start/,/^\#share_end/p' /etc/samba/smb.conf | sed 's/^\#share_start.*$//g;s/^\#share_end.*$//g' | zenity --text-info --title="Current Samba Shares"
 				main
 ;;
 "Add a User" )add_user
 ;;
-"Add Share") add_share
+"Add a Share") add_share
 ;;
-"Remove Share") rem_share
+"Remove a Share") rem_share
 ;;
-"Edit the smb.conf" ) leafpad /etc/samba/smb.conf
+"Edit the config file" ) exo-open /etc/samba/smb.conf
 ;;
 "Restart Network Services") restart_network
 ;;
