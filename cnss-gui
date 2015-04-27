@@ -76,7 +76,6 @@ echo "#======================= Share Definitions ===============================
 }
 
 function add_share() {
-zenity --width=600 --height=220 --info --title="$TITLE" --text "Never share system folders such as:\n /, /usr, /etc , /var ... "
 
 share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
 #Mark the begining and the end of share for handling
@@ -109,6 +108,7 @@ if [ -f /etc/samba/smb.conf.backup ]; then
 	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be removed.\n\nDo you want to continue?"; then
 		rm -f /etc/samba/smb.conf
 		mv -f /etc/samba/smb.conf.backup /etc/samba/smb.conf
+		main
 	else
 		main
 	fi
@@ -142,7 +142,7 @@ fi
 
 function rem_share() {
 #Share names selection
-sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --checklist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
+sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --radiolist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
 if [ $? = 1 ]; then
 	main
 fi
