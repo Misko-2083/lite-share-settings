@@ -1,3 +1,4 @@
+
 #!/bin/bash
 #Samba share settings GUI for Linux Lite
 #Licence GPLv2
@@ -82,7 +83,8 @@ share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share
 #Mark the begining and the end of share for handling
 echo "#share_start $share" >> /etc/samba/smb.conf
 echo ["$share"] >> /etc/samba/smb.conf
-path=$(zenity --title="$TITLE" --entry --text="Type the full path of the folder or paste it, eg /home/linuxlite/Music ")
+cd /home
+path=$(zenity --title="Select a folder to share" --file-selection --directory)
 echo path = "$path" >> /etc/samba/smb.conf
 echo "available = yes" >> /etc/samba/smb.conf
 echo "valid users = %U %G" >> /etc/samba/smb.conf
@@ -154,43 +156,6 @@ for k in $sharename; do sudo sed -i '/^\#share_start '$k'/,/^\#share_end '$k'/d'
 main
 }
 
-function help() {
-HELP=$(zenity --list --radiolist --width=350 --height=500 --title="$TITLE" --column=Select --column=Task \
-TRUE "Help: Run first time setup" \
-FALSE "Help: Show Shares" \
-FALSE "Help: Add a User" \
-FALSE "Help: Add a Share" \
-FALSE "Help: Remove a Share" \
-FALSE "Help: Edit the config file" \
-FALSE "Help: Restart Network Services" \
-FALSE "Help: Restore Previous Settings" \
-FALSE "Help: How to accses shares" \
-FALSE "Return to main" )
-
-case $HELP in
-"Help: Run first time setup") zenity --info --title="Help: $TITLE"  --text="Help."
-;;
-"Help: Show Shares") zenity --info --title="Help: $TITLE"  --text="Help."
-;;
-"Help: Add a User" ) zenity --info --title="Help: $TITLE"  --text="Help."
-;;
-"Help: Add a Share") zenity --info --title="Help: $TITLE"  --text="Help."
-;;
-"Help: Remove a Share") zenity --info --title="Help: $TITLE"  --text="Help."
-;;
-"Help: Edit the config file" ) zenity --info --title="Help: $TITLE" --text="Help."
-;;
-"Help: Restart Network Services") zenity --info --title="Help: $TITLE" --text="Help."
-;;
-"Help: Restore Previous Settings") zenity --info --title="Help: $TITLE" --text="Help."
-;;
-"Help: How to accses shares") zenity --info --title="Help: $TITLE" --text="Help."
-;;
-"Return to main") main
-;;
-esac
-}
-
 function main() {
 CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --column=Select --column=Task \
 FALSE "Run first time setup" \
@@ -201,13 +166,15 @@ FALSE "Remove a Share" \
 FALSE "Edit the config file" \
 FALSE "Restart Network Services" \
 FALSE "Restore Previous Settings" \
-FALSE "Help" \
 FALSE "Exit" )
 if [ $? = 1 ]; then
 exit 0
 fi
 case $CHOICE in
 "Run first time setup")
+		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nDo you want to continue?"; then
+			main
+		fi
 		add_first_user
 		global_settings
 		if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
@@ -217,7 +184,7 @@ case $CHOICE in
 		fi
 		restart_network
 ;;
-"Show Shares") sed -n '/^\#share_start/,/^\#share_end/p' /etc/samba/smb.conf | sed 's/^\#share_start.*$//g;s/^\#share_end.*$//g' | zenity --text-info --title="Current Samba Shares"
+"Show Shares") zenity --text-info --title="Show Samba Shares" </etc/samba/smb.conf
 				main
 ;;
 "Add a User" )add_user
@@ -231,9 +198,6 @@ case $CHOICE in
 "Restart Network Services") restart_network
 ;;
 "Restore Previous Settings") restore_prev
-
-;;
-"Help") help
 ;;
 "Exit") exit 0
 ;;
