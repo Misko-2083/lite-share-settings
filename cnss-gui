@@ -6,26 +6,49 @@
 TITLE="Lite Shares"
 
 function add_first_user() {
+#----Displays users with id greater than 1000 and less than 60000
+#----Adds FALSE and TRUE (TRUE only on the first) and
+#----stores everything in an aray
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
+
+#User selection dialog
 user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --print-column=2  --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
+       # Cancel
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      main
+	fi
+#Exit variable for the return status from the smbpasswd that will be runing in the subshell
 exit_status=$(mktemp /tmp/XXXXXX)
 
  echo -e "$(zenity --forms --title="$TITLE" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $USER  ||   echo 1 >> $exit_status) 
-
+#If exit satus is 1, passwords are mismatched or no password was typed
 if [ "$(cat $exit_status )"  == "1" ]; then
 	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
 	rm -f $exit_status
 	unset LL_LIST_H
 	main
 fi
+#Changes default user to the username selected
 sed -i 's/<[^>]*>/<'$user'>/g' /etc/samba/smbusers
+
 unset LL_LIST_H
 rm -f $exit_status
 }
 
 function add_user() {
+#----Displays users with id greater than 1000 and less than 60000
+#----Adds FALSE and TRUE (TRUE only on the first) and
+#----stores everything in an aray
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
+
+#User selection dialog
 user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
+      # Cancel
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      main
+	fi
+
+#Exit variable for the return status from the smbpasswd that will be runing in the subshell
 exit_status=$(mktemp /tmp/XXXXXX)
 
  echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
@@ -38,7 +61,9 @@ if [ "$(cat $exit_status )"  == "1" ]; then
 fi
 rm -f $exit_status
 
+#Adds user to the list in /etc/samba/smbusers
 echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
+
 unset LL_LIST_H
 main
 }
@@ -50,21 +75,35 @@ zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will
 	then
 	main
   fi
+  
+#Copies /etc/samba/smb.conf  to /etc/samba/smb.conf.backup
 cp -f /etc/samba/smb.conf /etc/samba/smb.conf.backup
+
+#Removes original
 rm -f /etc/samba/smb.conf
+
+#Creates new empty file 
 touch /etc/samba/smb.conf
+
+#Writing to smb.conf starts here
 echo "#======================= Global Settings ====================================" >> /etc/samba/smb.conf
 echo [global] >> /etc/samba/smb.conf
+
+#Workgroup selection dialog. On cancel selects the default value
 group=$(zenity --title="$TITLE" --entry --entry-text=WORKGROUP --text="Enter the name of the workgroup:" --cancel-label="Use Default")
   if [ $? = 1 ]; then
 	group="WORKGROUP"
   fi
+
 echo workgroup = "$group" >> /etc/samba/smb.conf
 echo server string =  Linux Lite Shares >> /etc/samba/smb.conf
+
+#Hostname selection dialog. On cancel selects the default value
 hostname=$(zenity --title="$TITLE" --entry-text=lite --entry --text="Enter the name of your computer (hostname):" --cancel-label="Use Default")
   if [ $? = 1 ]; then
 	hostname="lite"
   fi
+
 echo netbios name = "$hostname" >> /etc/samba/smb.conf
 echo "security = user" >> /etc/samba/smb.conf
 echo "encrypt passwords = true" >> /etc/samba/smb.conf
@@ -75,14 +114,34 @@ echo "dns proxy = no" >> /etc/samba/smb.conf
 echo "#======================= Share Definitions ===================================" >> /etc/samba/smb.conf
 }
 
+#Function that adds share
 function add_share() {
-
+#Share description input
 share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
-#Mark the begining and the end of share for handling
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      main
+	fi
+	
+	#If the user entered only blank spaces or starts with a hashtag, abort
+	echo "$share" | egrep "^[[:space:]]*$|^#" >/dev/null
+	if [ $? = 0 ]; then
+		zenity --warning \
+		--title="" --text="Share name can not be empty or start with a hash\nShare can not be added!"
+	 	main
+	fi
+#Marks the begining of share for easy handling
 echo "#share_start $share" >> /etc/samba/smb.conf
+
 echo ["$share"] >> /etc/samba/smb.conf
 cd /home
+
+#Path selection directory for the share
 path=$(zenity --title="Select a folder to share" --file-selection --directory)
+	#Action on cantel
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      main
+	fi
+	
 echo path = "$path" >> /etc/samba/smb.conf
 echo "available = yes" >> /etc/samba/smb.conf
 echo "valid users = %U %G" >> /etc/samba/smb.conf
@@ -104,6 +163,7 @@ main
 }
 
 function restore_prev() {
+#If the file exists offers to restore  previous network share settings
 if [ -f /etc/samba/smb.conf.backup ]; then
 	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be removed.\n\nDo you want to continue?"; then
 		rm -f /etc/samba/smb.conf
@@ -113,12 +173,13 @@ if [ -f /etc/samba/smb.conf.backup ]; then
 		main
 	fi
 else
-	zenity --info --title="$TITLE" --text="No previous setting found."
+	zenity --info --title="$TITLE" --text="No previous settings found."
 	main
 fi
 }
 
 function restart_network() {
+#Restarts network services
 stdbuf -oL /bin/bash \-c '(sudo service smbd restart && sudo service nmbd restart && sleep 3 )' 2>&1 |
 stdbuf -oL sed -n -e 's/^\(.\{128\}\).*/\1/' -e '/\[*$/ s/^/# /p' -e '/\*$/ s/^/# /p' |     #sed 's/^\(.\{128\}\).*/\1/'  Display only the first 128 characters
 zenity --progress --title="Restarting Network Share Services..." --pulsate \
@@ -128,7 +189,7 @@ zenity --progress --title="Restarting Network Share Services..." --pulsate \
                         
                                         zenity --error \
                                         --title="Error" --text="$CONFIGURE has failed."
-                                        exit 0
+                                        main
                                 fi
 
 PROCEED=$(zenity --info --title="$CONFIGURE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Your settings have been applied."; echo $?)
@@ -141,11 +202,17 @@ fi
 }
 
 function rem_share() {
+#Check if the share doesn't exists
+if [[ -z "$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf)" ]];then
+		zenity --warning --title="$TITLE" --text="Nothing was found for removal\n#share_start not found!"
+		main
+fi
 #Share names selection
 sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --radiolist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
 if [ $? = 1 ]; then
 	main
 fi
+
 if [ -z $sharename ]; then
 	zenity --warning --title="$TITLE" --text="Nothing was selected for removal!"
 	main
@@ -156,6 +223,7 @@ main
 }
 
 function main() {
+#Main dialogue
 CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --column=Select --column=Task \
 FALSE "Run first time setup" \
 TRUE "Show Shares" \
