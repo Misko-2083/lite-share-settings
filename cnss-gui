@@ -15,7 +15,7 @@ LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd 
 user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --print-column=2  --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
        # Cancel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                      main
+                      return
 	fi
 #Exit variable for the return status from the smbpasswd that will be runing in the subshell
 exit_status=$(mktemp /tmp/XXXXXX)
@@ -26,7 +26,7 @@ if [ "$(cat $exit_status )"  == "1" ]; then
 	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
 	rm -f $exit_status
 	unset LL_LIST_H
-	main
+	return
 fi
 #Changes default user to the username selected
 sed -i 's/<[^>]*>/<'$user'>/g' /etc/samba/smbusers
@@ -45,7 +45,7 @@ LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd 
 user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
       # Cancel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                      main
+                      return
 	fi
 
 #Exit variable for the return status from the smbpasswd that will be runing in the subshell
@@ -57,7 +57,7 @@ if [ "$(cat $exit_status )"  == "1" ]; then
 	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
 	rm -f $exit_status
 	unset LL_LIST_H
-	main
+	return
 fi
 rm -f $exit_status
 
@@ -65,7 +65,7 @@ rm -f $exit_status
 echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
 
 unset LL_LIST_H
-main
+return
 }
 
 function global_settings() {
@@ -73,7 +73,7 @@ zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will
 \n \nDo you want to continue?"
   if [ $? = 1 ];
 	then
-	main
+	return
   fi
   
 #Copies /etc/samba/smb.conf  to /etc/samba/smb.conf.backup
@@ -119,7 +119,7 @@ function add_share() {
 #Share description input
 share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                      main
+                      return
 	fi
 	
 	#If the user entered only blank spaces or starts with a hashtag, abort
@@ -127,7 +127,7 @@ share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share
 	if [ $? = 0 ]; then
 		zenity --warning \
 		--title="" --text="Share name can not be empty or start with a hash\nShare can not be added!"
-	 	main
+	 	return
 	fi
 #Marks the begining of share for easy handling
 echo "#share_start $share" >> /etc/samba/smb.conf
@@ -139,7 +139,7 @@ cd /home
 path=$(zenity --title="Select a folder to share" --file-selection --directory)
 	#Action on cantel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                      main
+                      return
 	fi
 	
 echo path = "$path" >> /etc/samba/smb.conf
@@ -159,7 +159,7 @@ echo "printable = no" >> /etc/samba/smb.conf
 echo "locking = no" >> /etc/samba/smb.conf
 echo "strict locking = no" >> /etc/samba/smb.conf
 echo "#share_end $share" >> /etc/samba/smb.conf
-main
+return
 }
 
 function restore_prev() {
@@ -168,13 +168,13 @@ if [ -f /etc/samba/smb.conf.backup ]; then
 	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be removed.\n\nDo you want to continue?"; then
 		rm -f /etc/samba/smb.conf
 		mv -f /etc/samba/smb.conf.backup /etc/samba/smb.conf
-		main
+		return
 	else
-		main
+		return
 	fi
 else
 	zenity --info --title="$TITLE" --text="No previous settings found."
-	main
+	return
 fi
 }
 
@@ -189,15 +189,15 @@ zenity --progress --title="Restarting Network Share Services..." --pulsate \
                         
                                         zenity --error \
                                         --title="Error" --text="$CONFIGURE has failed."
-                                        main
+                                        return
                                 fi
 
 PROCEED=$(zenity --info --title="$CONFIGURE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Your settings have been applied."; echo $?)
 if [ ${PROCEED} -eq 1 ]; then
 	zenity --info --title="Finished" --window-icon="${INSTALL_ICON}" --text="Your settings have been applied."
-	main;
+	return;
 else
-	main
+	return
 fi
 }
 
@@ -205,25 +205,25 @@ function rem_share() {
 #Check if the share doesn't exists
 if [[ -z "$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf)" ]];then
 		zenity --warning --title="$TITLE" --text="Nothing was found for removal\n#share_start not found!"
-		main
+		return
 fi
 #Share names selection
 sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --radiolist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
 if [ $? = 1 ]; then
-	main
+	return
 fi
 
 if [ -z $sharename ]; then
 	zenity --warning --title="$TITLE" --text="Nothing was selected for removal!"
-	main
+	return
 fi
 #remove shares
 for k in $sharename; do sudo sed -i '/^\#share_start '$k'/,/^\#share_end '$k'/d' /etc/samba/smb.conf; done
-main
+return
 }
 
-function main() {
-#Main dialogue
+
+while (true); do
 CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --column=Select --column=Task \
 FALSE "Run first time setup" \
 TRUE "Show Shares" \
@@ -240,7 +240,7 @@ fi
 case $CHOICE in
 "Run first time setup")
 		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nDo you want to continue?"; then
-			main
+			return
 		fi
 		add_first_user
 		global_settings
@@ -252,7 +252,7 @@ case $CHOICE in
 		restart_network
 ;;
 "Show Shares") zenity --text-info --title="Show Samba Shares" </etc/samba/smb.conf
-				main
+				return
 ;;
 "Add a User" )add_user
 ;;
@@ -269,6 +269,6 @@ case $CHOICE in
 "Exit") exit 0
 ;;
 esac
-}
+done
 
-main
+exit 0
