@@ -5,7 +5,11 @@
 
 TITLE="Lite Shares"
 
-function add_first_user() {
+function first_time() {
+		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nDo you want to continue?"; then
+			return
+		fi
+
 #----Displays users with id greater than 1000 and less than 60000
 #----Adds FALSE and TRUE (TRUE only on the first) and
 #----stores everything in an aray
@@ -29,46 +33,11 @@ if [ "$(cat $exit_status )"  == "1" ]; then
 	return
 fi
 #Changes default user to the username selected
-sed -i 's/<[^>]*>/<'$user'>/g' /etc/samba/smbusers
+echo '<'$user'> = "<'$user'>"' > /etc/samba/smbusers
 
 unset LL_LIST_H
 rm -f $exit_status
-}
 
-function add_user() {
-#----Displays users with id greater than 1000 and less than 60000
-#----Adds FALSE and TRUE (TRUE only on the first) and
-#----stores everything in an aray
-LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
-
-#User selection dialog
-user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
-      # Cancel
-	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                      return
-	fi
-
-#Exit variable for the return status from the smbpasswd that will be runing in the subshell
-exit_status=$(mktemp /tmp/XXXXXX)
-
- echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
-
-if [ "$(cat $exit_status )"  == "1" ]; then
-	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
-	rm -f $exit_status
-	unset LL_LIST_H
-	return
-fi
-rm -f $exit_status
-
-#Adds user to the list in /etc/samba/smbusers
-echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
-
-unset LL_LIST_H
-return
-}
-
-function global_settings() {
 zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will be backed up,
 \n \nDo you want to continue?"
   if [ $? = 1 ];
@@ -112,6 +81,45 @@ echo "map to guest = bad user" >> /etc/samba/smb.conf
 echo "guest account = nobody" >> /etc/samba/smb.conf
 echo "dns proxy = no" >> /etc/samba/smb.conf
 echo "#======================= Share Definitions ===================================" >> /etc/samba/smb.conf
+		if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
+			add_share
+		else
+			restart_network
+		fi
+		restart_network
+}
+
+function add_user() {
+#----Displays users with id greater than 1000 and less than 60000
+#----Adds FALSE and TRUE (TRUE only on the first) and
+#----stores everything in an aray
+LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
+
+#User selection dialog
+user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
+      # Cancel
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      return
+	fi
+
+#Exit variable for the return status from the smbpasswd that will be runing in the subshell
+exit_status=$(mktemp /tmp/XXXXXX)
+
+ echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
+
+if [ "$(cat $exit_status )"  == "1" ]; then
+	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
+	rm -f $exit_status
+	unset LL_LIST_H
+	return
+fi
+rm -f $exit_status
+
+#Adds user to the list in /etc/samba/smbusers
+echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
+
+unset LL_LIST_H
+return
 }
 
 #Function that adds share
@@ -234,25 +242,15 @@ FALSE "Edit the config file" \
 FALSE "Restart Network Services" \
 FALSE "Restore Previous Settings" \
 FALSE "Exit" )
+
+#If canceled exit
 if [ $? = 1 ]; then
-exit 0
+	exit 0
 fi
 case $CHOICE in
-"Run first time setup")
-		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nDo you want to continue?"; then
-			return
-		fi
-		add_first_user
-		global_settings
-		if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
-			add_share
-		else
-			restart_network
-		fi
-		restart_network
+"Run first time setup") first_time
 ;;
-"Show Shares") zenity --text-info --title="Show Samba Shares" </etc/samba/smb.conf
-				return
+"Show Shares") zenity --text-info --width=500 --title="Show Samba Shares" </etc/samba/smb.conf
 ;;
 "Add a User" )add_user
 ;;
