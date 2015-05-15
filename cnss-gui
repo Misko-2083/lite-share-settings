@@ -130,26 +130,28 @@ share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share
                       return
 	fi
 	
-	#If the user entered only blank spaces or starts with a hashtag, abort
-	echo "$share" | egrep "^[[:space:]]*$|^#" >/dev/null
-	if [ $? = 0 ]; then
+	#If the user entered special chars, abort
+	if [[ "$share" =~ [^0-9a-z-] ]]; then
 		zenity --warning \
-		--title="" --text="Share name can not be empty or start with a hash\nShare can not be added!"
+		--title="" --text="Share name can contain alphanumeric characters only\nShare can not be added!"
 	 	return
 	fi
-#Marks the begining of share for easy handling
-echo "#share_start $share" >> /etc/samba/smb.conf
 
-echo ["$share"] >> /etc/samba/smb.conf
 cd /home
 
 #Path selection directory for the share
 path=$(zenity --title="Select a folder to share" --file-selection --directory)
-	#Action on cantel
+	#Action on cancel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
                       return
 	fi
-	
+
+# Starts making changes after user input
+
+# Marks the begining of share for easy handling
+echo "#share_start $share" >> /etc/samba/smb.conf
+echo ["$share"] >> /etc/samba/smb.conf
+
 echo path = "$path" >> /etc/samba/smb.conf
 echo "available = yes" >> /etc/samba/smb.conf
 echo "valid users = %U %G" >> /etc/samba/smb.conf
@@ -166,6 +168,8 @@ echo "read only = no" >> /etc/samba/smb.conf
 echo "printable = no" >> /etc/samba/smb.conf
 echo "locking = no" >> /etc/samba/smb.conf
 echo "strict locking = no" >> /etc/samba/smb.conf
+
+# Marks the end of share for easy handling
 echo "#share_end $share" >> /etc/samba/smb.conf
 return
 }
@@ -250,7 +254,7 @@ fi
 case $CHOICE in
 "Run first time setup") first_time
 ;;
-"Show Shares") zenity --text-info --width=500 --title="Show Samba Shares" </etc/samba/smb.conf
+"Show Shares") zenity --text-info --width=500  --height=600 --title="Show Samba Shares" </etc/samba/smb.conf
 ;;
 "Add a User" )add_user
 ;;
