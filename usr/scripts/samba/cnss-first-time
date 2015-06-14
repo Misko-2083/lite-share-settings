@@ -1,0 +1,80 @@
+#!/bin/bash
+TITLE="Lite Shares"
+function adduser () {
+	#Exit variable for the return status from the smbpasswd that will be runing in the subshell
+	exit_status=$(mktemp /tmp/XXXXXX)
+
+ 	echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password for SAMBA twice.\nNote that this is not your administrator password" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )" | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
+
+	if [ "$(cat $exit_status )"  == "1" ]; then
+		zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
+		rm -f $exit_status
+		exit
+	fi
+	rm -f $exit_status
+
+	#Adds user to the list in /etc/samba/smbusers
+	echo '<'$user'> = "<'$user'>"' > /etc/samba/smbusers
+}
+
+function write_conf () {
+#Writing to smb.conf starts here
+echo "#======================= Global Settings ====================================" >> /etc/samba/smb.conf
+echo [global] >> /etc/samba/smb.conf
+
+echo workgroup = "$group" >> /etc/samba/smb.conf
+echo server string =  Linux Lite Shares >> /etc/samba/smb.conf
+
+echo netbios name = "$hostname" >> /etc/samba/smb.conf
+echo "security = user" >> /etc/samba/smb.conf
+echo "encrypt passwords = true" >> /etc/samba/smb.conf
+echo "username map = /etc/samba/smbusers" >> /etc/samba/smb.conf
+echo "map to guest = bad user" >> /etc/samba/smb.conf
+echo "guest account = nobody" >> /etc/samba/smb.conf
+echo "dns proxy = no" >> /etc/samba/smb.conf
+echo -e "\n" >> /etc/samba/smb.conf
+echo "#======================= Share Definitions ===================================" >> /etc/samba/smb.conf
+}
+
+function add_share() {
+
+
+	echo ["$share"] >> /etc/samba/smb.conf
+
+	echo path = "$path" >> /etc/samba/smb.conf
+	echo "available = yes" >> /etc/samba/smb.conf
+	echo "valid users = %U %G" >> /etc/samba/smb.conf
+	echo "write list = %U" >> /etc/samba/smb.conf
+	echo browsable = yes >> /etc/samba/smb.conf
+	echo public = no >> /etc/samba/smb.conf
+	echo writable = yes >> /etc/samba/smb.conf
+
+	echo "guest ok = no" >> /etc/samba/smb.conf
+	echo "read only = no" >> /etc/samba/smb.conf
+	echo "printable = no" >> /etc/samba/smb.conf
+	echo "locking = no" >> /etc/samba/smb.conf
+	echo "strict locking = no" >> /etc/samba/smb.conf
+
+	# Marks the end of share for easy handling
+	echo -e "\n" >> /etc/samba/smb.conf
+
+return
+}
+
+adduser
+
+#Copies /etc/samba/smb.conf  to /etc/samba/smb.conf.backup
+cp -f /etc/samba/smb.conf /etc/samba/smb.conf.backup
+
+#Removes original
+rm -f /etc/samba/smb.conf
+
+#Creates new empty file 
+touch /etc/samba/smb.conf
+
+write_conf
+
+if [[ ! -z "$share" &&  ! -z "$path" ]]; then
+     add_share
+fi
+	/usr/scripts/samba/restart_network
