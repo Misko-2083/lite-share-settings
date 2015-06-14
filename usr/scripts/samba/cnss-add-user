@@ -1,0 +1,18 @@
+#!/bin/bash
+         TITLE="Lite Shares"
+	#Exit variable for the return status from the smbpasswd that will be runing in the subshell
+	exit_status=$(mktemp /tmp/XXXXXX)
+
+ 	echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password for SAMBA twice.\nNote that this is not your" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )" | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
+
+	if [ "$(cat $exit_status )"  == "1" ]; then
+		zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
+		rm -f $exit_status
+		exit
+	fi
+	rm -f $exit_status
+
+	#Adds user to the list in /etc/samba/smbusers
+	echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
+
+zenity --info --title="$TITLE" --text="User $user added."
