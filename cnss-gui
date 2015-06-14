@@ -1,12 +1,14 @@
 #!/bin/bash
 #Samba share settings GUI for Linux Lite
 #Licence GPLv2
-#Run with: /usr/bin/su-to-root -X -c /path/to/cnss-gui
+#Command: /usr/bin/su-to-root -X -c /path/to/cnss-gui
+#Depends: zenity
+#
 
 TITLE="Lite Shares"
 
 function first_time() {
-		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nDo you want to continue?"; then
+		if ! zenity --question --title="$TITLE" --text="First time setup should be only runned once!\nYour current /etc/samba/smb.conf will be backed up,\nDo you want to continue?"; then
 			return
 		fi
 
@@ -16,47 +18,14 @@ function first_time() {
 LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd |sed '0,/FALSE/s/FALSE/TRUE/'))
 
 #User selection dialog
-user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --print-column=2  --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
-       # Cancel
+user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
+      # Cancel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      unset LL_LIST_H
                       return
 	fi
-#Exit variable for the return status from the smbpasswd that will be runing in the subshell
-exit_status=$(mktemp /tmp/XXXXXX)
-
- echo -e "$(zenity --forms --title="$TITLE" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $USER  ||   echo 1 >> $exit_status) 
-#If exit satus is 1, passwords are mismatched or no password was typed
-if [ "$(cat $exit_status )"  == "1" ]; then
-	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
-	rm -f $exit_status
-	unset LL_LIST_H
-	return
-fi
-#Changes default user to the username selected
-echo '<'$user'> = "<'$user'>"' > /etc/samba/smbusers
 
 unset LL_LIST_H
-rm -f $exit_status
-
-zenity --question --title "$TITLE" --text "Your current /etc/samba/smb.conf will be backed up,
-\n \nDo you want to continue?"
-  if [ $? = 1 ];
-	then
-	return
-  fi
-  
-#Copies /etc/samba/smb.conf  to /etc/samba/smb.conf.backup
-cp -f /etc/samba/smb.conf /etc/samba/smb.conf.backup
-
-#Removes original
-rm -f /etc/samba/smb.conf
-
-#Creates new empty file 
-touch /etc/samba/smb.conf
-
-#Writing to smb.conf starts here
-echo "#======================= Global Settings ====================================" >> /etc/samba/smb.conf
-echo [global] >> /etc/samba/smb.conf
 
 #Workgroup selection dialog. On cancel selects the default value
 group=$(zenity --title="$TITLE" --entry --entry-text=WORKGROUP --text="Enter the name of the workgroup:" --cancel-label="Use Default")
@@ -64,8 +33,7 @@ group=$(zenity --title="$TITLE" --entry --entry-text=WORKGROUP --text="Enter the
 	group="WORKGROUP"
   fi
 
-echo workgroup = "$group" >> /etc/samba/smb.conf
-echo server string =  Linux Lite Shares >> /etc/samba/smb.conf
+
 
 #Hostname selection dialog. On cancel selects the default value
 hostname=$(zenity --title="$TITLE" --entry-text=lite --entry --text="Enter the name of your computer (hostname):" --cancel-label="Use Default")
@@ -73,20 +41,48 @@ hostname=$(zenity --title="$TITLE" --entry-text=lite --entry --text="Enter the n
 	hostname="lite"
   fi
 
-echo netbios name = "$hostname" >> /etc/samba/smb.conf
-echo "security = user" >> /etc/samba/smb.conf
-echo "encrypt passwords = true" >> /etc/samba/smb.conf
-echo "username map = /etc/samba/smbusers" >> /etc/samba/smb.conf
-echo "map to guest = bad user" >> /etc/samba/smb.conf
-echo "guest account = nobody" >> /etc/samba/smb.conf
-echo "dns proxy = no" >> /etc/samba/smb.conf
-echo "#======================= Share Definitions ===================================" >> /etc/samba/smb.conf
-		if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
-			add_share
-		else
-			restart_network
-		fi
-		restart_network
+if zenity --question --title="$TITLE" --text="Do you want to add a share?"; then
+#Share description input
+share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share with no blank spaces in the name. \n Examples: music or my-music ")
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      unset share
+	fi
+	
+	#If the user entered special chars, abort
+	if [[ "$share" =~ [^0-9a-z-A-Z] ]]; then
+		zenity --warning \
+		--title="" --text="Share name can contain alphanumeric characters only\nShare can not be added!"
+	 	      unset share
+	fi
+
+    if [ ! -z "$share" ]; then
+      cd ~
+      #Path selection directory for the share
+        path="$(zenity --title="Select a folder to share" --file-selection --directory)"
+
+	#Check if the output is a path
+        echo "$path" | grep "/"
+	if [  $? -ne 0  ]; then
+                      zenity --error --text="You must select a valid directory\nShare will not be added"
+                      unset path
+                     unset share
+	fi
+       #Check if the directory exists
+       if [ ! -d $path ]; then
+                       zenity --error --text="You must select a valid directory\nShare will not be added"
+                       unset path
+                      unset share
+        fi
+      fi
+
+
+fi
+
+    if zenity --question --text="You selected:\nWorkgroup: <b>$group</b>\nHostname: <b>$hostname</b>\nUsername:<b>$user</b>\nShare name:<b>$share</b>\nShare:<b>$path</b>\nDo you want to continue?"; then
+	#Ask for password, pass variables and run the script
+	gksudo -m "You need to provide your password in order to add users." --  env user="$user" group="$group" hostname="$hostname" share="$share" path="$path" /usr/scripts/samba/cnss-first-time
+    fi
+
 }
 
 function add_user() {
@@ -99,28 +95,49 @@ LL_LIST_H+=($(awk -F':' '$3>=1000 && $3<=60000 {print "FALSE", $1}' /etc/passwd 
 user="$(zenity --title="Add a user to Samba" --list --radiolist --text="Select a user name you wish to add to Samba." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
       # Cancel
 	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      unset LL_LIST_H
                       return
 	fi
 
-#Exit variable for the return status from the smbpasswd that will be runing in the subshell
-exit_status=$(mktemp /tmp/XXXXXX)
-
- echo -e "$(zenity --forms --title="Enter Password" --text="Enter the password twice:" --separator="\n" --add-password="Enter Password" --add-password="Repeat Password" || exit )"  | (smbpasswd -a -s $user  ||   echo 1 >> $exit_status) 
-
-if [ "$(cat $exit_status )"  == "1" ]; then
-	zenity --error --title="$TITLE" --text="Error:\nPassword mismatch or\nNo Password entered."
-	rm -f $exit_status
-	unset LL_LIST_H
-	return
+if grep  '^<'$user'> = "<'$user'>"$'  /etc/samba/smbusers; then
+    	zenity --warning \
+		--title="$TITLE" --text="Username is allready added\nUser can not be added!\nUse change user password instead."
+return
 fi
-rm -f $exit_status
 
-#Adds user to the list in /etc/samba/smbusers
-echo '<'$user'> = "<'$user'>"' >> /etc/samba/smbusers
+#Ask for password, pass variables and run the script
+gksudo -m "You need to provide your password in order to add users." --  env user="$user" /usr/scripts/samba/cnss-add-user
 
 unset LL_LIST_H
 return
 }
+
+function ch_password() {
+#get list of added smb users from /etc/samba/smbusers 
+LL_LIST_H+=($(awk '{print "FALSE", $1}' /etc/samba/smbusers | sed 's/[<>]//g' |sed '0,/FALSE/s/FALSE/TRUE/'))
+
+if [ -z ${LL_LIST_H[@]} ]; then
+    	zenity --warning \
+		--title="$TITLE" --text="No user found\nAdd a user first."
+    return
+fi
+
+#User selection dialog
+user="$(zenity --title="Change Samba Password" --list --radiolist --text="Select a user name to change the password." --column="Select" --column="Username" --width=325  --height=300  "${LL_LIST_H[@]}")"
+      # Cancel
+	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+                      unset LL_LIST_H
+                      return
+	fi
+
+
+#Ask for password, pass variables and run the script
+gksudo -m "You need to provide your password in order change users's Samba password." --  env user="$user" /usr/scripts/samba/cnss-chpasswd
+
+unset LL_LIST_H
+return
+}
+
 
 #Function that adds share
 function add_share() {
@@ -131,59 +148,70 @@ share=$(zenity --title="$TITLE" --entry --text="Enter a short name for the share
 	fi
 	
 	#If the user entered special chars, abort
-	if [[ "$share" =~ [^0-9a-z-] ]]; then
+	if [[ "$share" =~ [^0-9a-z-A-Z] ]]; then
 		zenity --warning \
 		--title="" --text="Share name can contain alphanumeric characters only\nShare can not be added!"
 	 	return
 	fi
 
-cd /home
+conf=$(cat /etc/samba/smb.conf | grep "^\[$share\]")
+if [[ ! -z "$conf" ]]; then
+		zenity --warning \
+		--title="" --text="Share name allready exists\nShare can not be added!"
+	 	return
+fi
 
 #Path selection directory for the share
-path=$(zenity --title="Select a folder to share" --file-selection --directory)
-	#Action on cancel
-	if [ "${PIPESTATUS[0]}" -ne "0" ]; then
+path="$(zenity --title="Select a folder to share" --file-selection --directory)"
+
+	#Check if the output is a path
+        echo "$path" | grep "/"
+	if [  $? -ne 0  ]; then
+                      zenity --error --text="You must select a valid directory"
                       return
 	fi
+       #Check if the directory exists
+       if [ ! -d $path ]; then
+                       zenity --error --text="You must select a valid directory"
+                       return
+        fi
 
-# Starts making changes after user input
 
-# Marks the begining of share for easy handling
-echo "#share_start $share" >> /etc/samba/smb.conf
-echo ["$share"] >> /etc/samba/smb.conf
 
-echo path = "$path" >> /etc/samba/smb.conf
-echo "available = yes" >> /etc/samba/smb.conf
-echo "valid users = %U %G" >> /etc/samba/smb.conf
-echo "write list = %U" >> /etc/samba/smb.conf
-echo browsable = yes >> /etc/samba/smb.conf
-echo public = no >> /etc/samba/smb.conf
-if zenity --question --title="$TITLE" --text="Do you want to allow recording and change on the files?"; then
+gksudo -m "You need to provide your password in order to add shares to SAMBA." --  env path="$path" share="$share" /bin/bash -c '
+
+	echo ["$share"] >> /etc/samba/smb.conf
+
+	echo path = "$path" >> /etc/samba/smb.conf
+	echo "available = yes" >> /etc/samba/smb.conf
+	echo "valid users = %U %G" >> /etc/samba/smb.conf
+	echo "write list = %U" >> /etc/samba/smb.conf
+	echo browsable = yes >> /etc/samba/smb.conf
+	echo public = no >> /etc/samba/smb.conf
 	echo writable = yes >> /etc/samba/smb.conf
-else
-	echo writable = no >> /etc/samba/smb.conf
-fi
-echo "guest ok = no" >> /etc/samba/smb.conf
-echo "read only = no" >> /etc/samba/smb.conf
-echo "printable = no" >> /etc/samba/smb.conf
-echo "locking = no" >> /etc/samba/smb.conf
-echo "strict locking = no" >> /etc/samba/smb.conf
 
-# Marks the end of share for easy handling
-echo "#share_end $share" >> /etc/samba/smb.conf
+	echo "guest ok = no" >> /etc/samba/smb.conf
+	echo "read only = no" >> /etc/samba/smb.conf
+	echo "printable = no" >> /etc/samba/smb.conf
+	echo "locking = no" >> /etc/samba/smb.conf
+	echo "strict locking = no" >> /etc/samba/smb.conf
+	echo -e "\n" >> /etc/samba/smb.conf'
+
 return
 }
 
 function restore_prev() {
 #If the file exists offers to restore  previous network share settings
 if [ -f /etc/samba/smb.conf.backup ]; then
-	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be removed.\n\nDo you want to continue?"; then
-		rm -f /etc/samba/smb.conf
+    gksudo -m "You need to provide your password for restoring previous netwotk share settings." -- /bin/bash -c '
+	if zenity --question --title="$TITLE" --text="This will restore your previous network share settings.\n\nIf you proceed your current settings will be backed up.\n\nDo you want to continue?"; then
+		mv -f /etc/samba/smb.conf /etc/samba/smb.conf.backup_
 		mv -f /etc/samba/smb.conf.backup /etc/samba/smb.conf
-		return
+	        mv -f /etc/samba/smb.conf.backup_  /etc/samba/smb.conf.backup
+		exit
 	else
-		return
-	fi
+		exit
+	fi'
 else
 	zenity --info --title="$TITLE" --text="No previous settings found."
 	return
@@ -192,45 +220,14 @@ fi
 
 function restart_network() {
 #Restarts network services
-stdbuf -oL /bin/bash \-c '(sudo service smbd restart && sudo service nmbd restart && sleep 3 )' 2>&1 |
-stdbuf -oL sed -n -e 's/^\(.\{128\}\).*/\1/' -e '/\[*$/ s/^/# /p' -e '/\*$/ s/^/# /p' |     #sed 's/^\(.\{128\}\).*/\1/'  Display only the first 128 characters
-zenity --progress --title="Restarting Network Share Services..." --pulsate \
---width=600 --auto-close 
+gksudo -m "You need to provide your password in order to restart network services." --   /usr/scripts/samba/restart_network
 
-                                if [ "${PIPESTATUS[0]}" -ne "0" ]; then
-                        
-                                        zenity --error \
-                                        --title="Error" --text="$CONFIGURE has failed."
-                                        return
-                                fi
-
-PROCEED=$(zenity --info --title="$CONFIGURE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Your settings have been applied."; echo $?)
-if [ ${PROCEED} -eq 1 ]; then
-	zenity --info --title="Finished" --window-icon="${INSTALL_ICON}" --text="Your settings have been applied."
-	return;
-else
-	return
-fi
+return
 }
 
 function rem_share() {
-#Check if the share doesn't exists
-if [[ -z "$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf)" ]];then
-		zenity --warning --title="$TITLE" --text="Nothing was found for removal\n#share_start not found!"
-		return
-fi
-#Share names selection
-sharename=$(sed -n '/^\#share_start/{n;p;}' /etc/samba/smb.conf | sed 's/\[/FALSE\n/g;s/\]//g' | zenity --list --radiolist --column=Select --column="Share Name" --text="Select the shares you whish to remove.")
-if [ $? = 1 ]; then
-	return
-fi
-
-if [ -z $sharename ]; then
-	zenity --warning --title="$TITLE" --text="Nothing was selected for removal!"
-	return
-fi
 #remove shares
-for k in $sharename; do sudo sed -i '/^\#share_start '$k'/,/^\#share_end '$k'/d' /etc/samba/smb.conf; done
+gksudo -m "You need to provide your password in order to remove network shares."  /usr/scripts/samba/cnss-remove
 return
 }
 
@@ -240,6 +237,7 @@ CHOICE=$(zenity --list --radiolist --title="$TITLE" --width=350 --height=500 --c
 FALSE "Run first time setup" \
 TRUE "Show Shares" \
 FALSE "Add a User" \
+FALSE "Change User Password" \
 FALSE "Add a Share" \
 FALSE "Remove a Share" \
 FALSE "Edit the config file" \
@@ -258,11 +256,13 @@ case $CHOICE in
 ;;
 "Add a User" )add_user
 ;;
+"Change User Password") ch_password
+;;
 "Add a Share") add_share
 ;;
 "Remove a Share") rem_share
 ;;
-"Edit the config file" ) exo-open /etc/samba/smb.conf
+"Edit the config file" ) gksudo -m "You need to provide your password in order to edit network shares." --  env sharename="$sharename" /bin/bash -c 'exo-open /etc/samba/smb.conf'
 ;;
 "Restart Network Services") restart_network
 ;;
