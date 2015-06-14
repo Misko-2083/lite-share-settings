@@ -1,0 +1,43 @@
+#!/bin/bash
+ARR=()
+
+while read  line
+  do
+         line=$(echo "$line" |  grep -E "^\[.*\]$" | grep -vE "^\[global\]$" 2>/dev/null)         #Grep what we need, exclude global
+         if [[ ! -z "$line" ]]; then
+                   ARR+=( $( echo "FALSE $line" 2>&1| sed  's/\[//g;s/\]//g' ) )     #Populate array, add FALSE, remove brackets
+         fi
+  done <  /etc/samba/smb.conf
+
+if [ ${#ARR[@]} -eq 0 ]; then
+     zenity --info --text="No share was found.\nNothing to remove."
+    exit
+fi
+
+selection=$(zenity --list --checklist --column=pick --column=value "${ARR[@]}")
+
+if [ $? != 0 ]; then
+      exit
+fi
+
+if [ -z $selection ]; then
+      zenity --warning --text="No share name was selected"
+      exit
+fi
+
+selection_array=()
+
+OIFS=$IFS
+  IFS='|'
+  selection_array=($selection)
+IFS=$OIFS
+
+for k in ${selection_array[@]};
+  do
+        sed -i -r '/^\['$k'\]$/,/^\[/{ /^\['$k'\]$/ d; /^\[/! d }' /etc/samba/smb.conf          #Delete only from the first pattern to the first [
+if [ $? != 0 ]; then
+     zenity --error --text="Could not remove share name\n<b>$k</b>"
+     exit
+fi
+ done
+
