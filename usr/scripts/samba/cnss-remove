@@ -14,14 +14,14 @@ if [ ${#ARR[@]} -eq 0 ]; then
     exit
 fi
 
-selection=$(zenity --list --checklist --column=pick --column=value "${ARR[@]}")
+selection=$(zenity --list --checklist --title="Remove Shares" --column=Select --column=Share "${ARR[@]}")
 
 if [ $? != 0 ]; then
       exit
 fi
 
 if [ -z $selection ]; then
-      zenity --warning --text="No share name was selected"
+      zenity --warning --text="No Share was selected"
       exit
 fi
 
@@ -40,4 +40,3 @@ if [ $? != 0 ]; then
      exit
 fi
  done
-
