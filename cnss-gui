@@ -192,6 +192,7 @@ gksudo -m "You need to provide your password in order to add shares to Samba." -
 	echo "locking = no" >> /etc/samba/smb.conf
 	echo "strict locking = no" >> /etc/samba/smb.conf
 	echo -e "\n" >> /etc/samba/smb.conf'
+		zenity --info --title="Share Added" --text="Share Added."
 
 return
 }
@@ -204,6 +205,7 @@ if [ -f /etc/samba/smb.conf.backup ]; then
 		mv -f /etc/samba/smb.conf /etc/samba/smb.conf.backup_
 		mv -f /etc/samba/smb.conf.backup /etc/samba/smb.conf
 	        mv -f /etc/samba/smb.conf.backup_  /etc/samba/smb.conf.backup
+		zenity --info --title="Restore Previous Settings" --width="260" --text="Previous Settings restored."
 		exit
 	else
 		exit
