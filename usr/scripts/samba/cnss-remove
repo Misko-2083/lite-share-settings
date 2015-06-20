@@ -10,7 +10,7 @@ while read  line
   done <  /etc/samba/smb.conf
 
 if [ ${#ARR[@]} -eq 0 ]; then
-     zenity --info --text="No share was found.\nNothing to remove."
+     zenity --info --text="No share was found.\n\nNothing to remove."
     exit
 fi
 
@@ -19,6 +19,8 @@ selection=$(zenity --list --checklist --title="Remove Shares" --column=Select --
 if [ $? != 0 ]; then
       exit
 fi
+
+		zenity --info --title="Share Removed" --text="Share Removed."
 
 if [ -z $selection ]; then
       zenity --warning --text="No Share was selected"
