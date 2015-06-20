@@ -8,7 +8,7 @@
 TITLE="Lite Shares"
 
 function first_time() {
-		if ! zenity --question --title="First Time Network Shares Setup" --text="First time setup should be only runned once.\nYour current settings will be backed up.\n\nDo you want to continue?"; then
+		if ! zenity --question --title="First Time Network Shares Setup" --text="First time setup should only be run once.\nYour current settings will be backed up.\n\nDo you want to continue?"; then
 			return
 		fi
 
