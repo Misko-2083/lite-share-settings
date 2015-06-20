@@ -5,7 +5,7 @@
          zenity --progress --title="Restarting Network Share Services..." --pulsate --width=600 --auto-close
                                 if [ "${PIPESTATUS[0]}" -ne "0" ]; then
                         
-                                        zenity --error  --title="Error" --text="Restarting network services has failed."
+                                        zenity --error  --title="Error" --text="Restarting Network Services has failed."
                                         exit
                                 fi
-                                        zenity --info --title="$TITLE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Network services restarted succsessfully."
+                                        zenity --info --title="$TITLE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Network Services restarted successfully."
