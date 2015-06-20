@@ -8,4 +8,4 @@
                                         zenity --error  --title="Error" --text="Restarting Network Services has failed."
                                         exit
                                 fi
-                                        zenity --info --title="$TITLE" --window-icon=/usr/share/icons/zenity-llcc.png --width="280" --text="Network Services restarted successfully."
+                                        zenity --info --title="$TITLE" --window-icon=/usr/share/icons/zenity-llcc.png --text="Network Services restarted successfully."
